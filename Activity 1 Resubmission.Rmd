@@ -1,0 +1,242 @@
+---
+title: "Activity One Biometry"
+author: "EMH"
+date: "2025-09-27"
+output: pdf_document
+---
+
+```{r setup and import dataset, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readr)
+library(tableone)
+getwd()
+library(readxl)
+library(dplyr)
+library(ggplot2)
+
+# Import Data Sets 
+CPAPAdherence_Data_1_ <- read_csv("CPAPAdherence_Data (1).csv")
+CPAPAdherence_Data_Dictionary <- read_excel("CPAPAdherence_Data_Dictionary.xlsx")
+
+```
+
+
+
+```{r check data for errors , echo =FALSE }
+# 1. Check age
+age_errors <- CPAPAdherence_Data_1_ %>% filter(age < 18 | age > 100)
+
+
+# 2. Check sex
+sex_errors <- CPAPAdherence_Data_1_ %>% filter(!(sex %in% c(0, 1)))
+
+
+# 3. Check race_white
+race_white_errors <- CPAPAdherence_Data_1_ %>% filter(!(race_white %in% c(0, 1)))
+
+
+# 4. Check race_black
+race_black_errors <- CPAPAdherence_Data_1_ %>% filter(!(race_black %in% c(0, 1)))
+
+
+# 5. Check race_other
+race_other_errors <- CPAPAdherence_Data_1_ %>% filter(!(race_other %in% c(0, 1)))
+
+
+# 6. Check education
+education_errors <- CPAPAdherence_Data_1_ %>% 
+  filter(!(education %in% c("> high school", "<= high school")) & !is.na(education))
+
+
+# 7. Check avg_daily_cpap
+cpap_errors <- CPAPAdherence_Data_1_ %>% filter(avg_daily_cpap < 0)
+
+
+# 8. Check ahi
+ahi_errors <- CPAPAdherence_Data_1_ %>% filter(ahi < 0)
+
+
+# 9. Check ess
+ess_errors <- CPAPAdherence_Data_1_ %>% filter(ess < 0 | ess > 24)
+
+
+# 10. Check mmse
+mmse_errors <- CPAPAdherence_Data_1_ %>% filter(mmse < 0 | mmse > 30)
+
+
+#11 Check Duplicate Subject ID numbers 
+duplicated_ids <- CPAPAdherence_Data_1_$subject_id[duplicated(CPAPAdherence_Data_1_$subject_id)]
+
+
+
+```
+
+# Data Checking
+
+I decided to look at the dataset row by row using filtering functions in R. I compared each column against the acceptable ranges and values defined in the data dictionary. By doing that, I found the following errors:
+
+- **Education**: One entry was coded as `"N/A"` instead of `"> high school"` or "`<= high school"`.
+- **Race (Other)**: One subject had a value of `"p"` in the `race_other` column, which is not an acceptable  value.
+- **Age**: One subject had an age of `555`, which is far outside the valid adult range of `18–100` 
+- **Sex**: One subject had a value of `2` for sex, which is invalid according to the dictionary (`0 = Male`, `1 = Female`).
+- **ESS (Epworth Sleepiness Scale)**: One subject had a value of `30`, which exceeds the maximum allowable value of `24`. 
+- **Subject ID**: One Subject-ID number was listed twice `15-00609` which is an error. 
+- **Avg_DAily_CAP** : The data values in this column are 8 decimal points long. While this is not an error this is uncharacteristically long and I would reccomend they be rounded to 2 decimal points. 
+
+
+
+```{r all work , echo=FALSE}
+# Clean the dataset up 
+CPAPAdherence_Clean <- CPAPAdherence_Data_1_ %>%
+ 
+  
+  #Remove the Duplicated Subject Id listing 
+  filter(!duplicated(subject_id)) %>%
+  
+  
+    mutate(
+    age = ifelse(age < 18 | age > 100, NA, age),
+    sex = ifelse(sex %in% c(0, 1), sex, NA),
+    race_white = ifelse(race_white %in% c(0, 1), race_white, NA),
+    race_black = ifelse(race_black %in% c(0, 1), race_black, NA),
+    race_other = ifelse(race_other %in% c(0, 1), race_other, NA),
+    education = ifelse(education %in% c("> high school", "<= high school"), education, NA),
+    avg_daily_cpap = ifelse(avg_daily_cpap < 0, NA, avg_daily_cpap),
+    ahi = ifelse(ahi < 0, NA, ahi),
+    ess = ifelse(ess >= 0 & ess <= 24, ess, NA),
+    mmse = ifelse(mmse >= 0 & mmse <= 30, mmse, NA),
+    # Round CPAP values
+    avg_daily_cpap = round(avg_daily_cpap, 2)
+  ) %>%
+  # Create derived variables
+  mutate(
+    race = case_when(
+      race_white == 1 ~ "White",
+      race_black == 1 ~ "Black",
+      race_other == 1 ~ "Other",
+      TRUE ~ NA_character_
+    ),
+    adherence = ifelse(avg_daily_cpap >= 4, 1, 0),
+    adherence_label = ifelse(adherence == 1, "Adherent", "Non-adherent")
+  )
+
+
+```
+
+*Step 9. 4 charts and their description.*
+
+
+```{r, echo=FALSE}
+ggplot(CPAPAdherence_Clean, aes(x = ahi)) +
+  geom_histogram(aes(y = after_stat(density)), binwidth = 5, fill = "lightgray", color = "black") +
+  geom_density(color = "blue", linewidth = 1) +  
+  labs(
+    title = "AHI Distribution",
+    x = "AHI (Apnea-Hypopnea Index)",
+    y = "Density"
+  )
+
+```
+**Figure 1** Histogram showing the distribution of AHI
+
+The distribution of the AHI values are right skewed indicating that most of the participants have a lower AHI value. This can suggest that even though many participants experience sleep apnea severe cases of sleep apnea are not common. The distribution display is univariate since it is only visualizing one variable which is AHI. 
+
+
+
+```{r figure 2, echo=FALSE}
+ggplot(CPAPAdherence_Clean, aes(x = adherence_label, y = age)) +
+  geom_boxplot(fill = "lightblue", color = "black") +
+  labs(
+    title = "Figure 2. Boxplot Showing Five-Number Summary of Age by CPAP Adherence",
+    x = "CPAP Adherence",
+    y = "Age (years)"
+  ) +
+  theme_minimal()
+
+```
+
+**Figure 2** Boxplot displaying the distribution of participant ages 
+
+In this boxplot, the adherent group shows a right-skewed distribution, indicated by the median line being slightly below the center of the box and a wider interquartile range (IQR). This suggests that the ages in the adherent group are just slightly more spread out, with some older individuals pulling the distribution to the right. The non-adherent group has a more symmetrical distribution, with the median line near the center of a smaller IQR, indicating that ages are more tightly clustered. This is a bivariate display.
+
+```{r figure 3, echo=FALSE}
+
+ggplot(CPAPAdherence_Clean, aes(x = race, fill = adherence_label)) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Distribution of Race by CPAP Adherence",
+    x = "Race",
+    y = "Count",
+    fill = "Adherence Status"
+  ) +
+  theme_minimal()
+
+```
+
+**Figure 3.** Bar graph showing the count of participants by race and their CPAP adherence status.
+
+This bar plot displays the distribution of race alongside CPAP adherence compliance. It is clear that the number of White participants who are adherent is much higher compared to non-adherent White participants. In contrast, the difference between adherent and non-adherent Black participants is less pronounced, with slightly more individuals being non-adherent. This is a bivariate display. 
+
+
+
+
+
+```{r figure 4, echo=FALSE}
+
+ggplot(CPAPAdherence_Clean, aes(x = ess, y = mmse, color = adherence_label)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Relationship between ESS and MMSE by CPAP Adherence",
+    x = "ESS Score",
+    y = "MMSE Score",
+    color = "Adherence Status"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+
+**Figure 4** Scatter plot displaying ess to mmse scores 
+
+
+
+This scatter plot shows the relationship between daytime sleepiness (ess) and cognitive function (mmse), with points and trend lines colored by CPAP adherence status. It highlights how sleepiness and cognitive scores relate across individuals who are adherent versus non-adherent to CPAP therapy.This is a bivariate display. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r table 1, echo=FALSE}
+library(tableone)
+
+Variables <- c("age", "sex", "ethnicity", "education", "race_black", "race_white", "race_other", "ahi", "ess", "mmse")
+
+table1 <- CreateTableOne(vars = Variables, strata = "adherence_label", data = CPAPAdherence_Clean, factorVars = c("sex", "ethnicity", "education", "race_black", "race_white", "race_other"))
+
+print(table1, showAllLevels = TRUE)
+
+```
+
+**Table 1**
+
+This study examines older adults with sleep apnea, focusing on how consistent use of CPAP therapy (defined as greater than or equal to 4 hours/night) relates to sleepiness and cognitive function. The study sample included 174 participants, with 129 classified as adherent and 45 as non-adherent. The average age was similar between groups (approximately 67 years), and sex distribution was balanced, with just over half identifying as female in both groups. Most participants were not Hispanic or Latino and had more than a high school education. There were significant racial differences between adherence groups: a higher proportion of non-adherent individuals identified as Black (42.2%) compared to the adherent group (14.0%), and fewer were White (48.9% vs. 78.9%, respectively). Overall, adherence to CPAP was associated with notable racial disparities but not with differences in age, sex, education, or clinical characteristics.
+
+
+
+
