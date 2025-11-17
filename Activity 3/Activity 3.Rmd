@@ -1,0 +1,337 @@
+---
+title: "Activity 3"
+author: "EMH"
+date: "2025-11-15"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+library(readxl)
+library(tidyverse)
+library(gtsummary)
+library(gt)    
+library(effectsize)
+library(rcompanion)
+library(car)
+library(emmeans)
+library(psych)
+library(dplyr)
+library(tidyr)
+library(broom)
+library(flextable)
+SRD <- read_excel("SuicideRisk_Data.xlsx")
+
+```
+
+
+
+## Question 1 
+
+#### H.Interpretation 
+Depression scores were significantly higher in people with a history of suicide compared to those without. People with a history of suicide scored approximately twice as high on having depressive symptoms. Depression levels have a strong correlation/association to having a history of suicidal behavior 
+
+#### I.Interpretation
+Gender was not statistically significant between the two suicide-history groups. Gender does not play a part in whether someone will have a history of suicide or not. 
+
+
+
+```{r building table 1, echo=FALSE,message=FALSE}
+SRD <- SRD %>%
+  mutate(
+    HX_SUICIDE = factor(HX_SUICIDE, levels = c(1, 0),
+                        labels = c("History", "No History")),
+    GENDER = factor(GENDER),
+    RACE = factor(RACE),
+    ETHNICITY = factor(ETHNICITY),
+    INCOME = factor(INCOME)
+  )
+mean_sd <- function(x) {
+  sprintf("%.2f ± %.2f", mean(x, na.rm = TRUE), sd(x, na.rm = TRUE))
+}
+
+prop_fmt <- function(n, total) {
+  sprintf("%d (%.1f%%)", n, 100*n/total)
+}
+
+p_val_fmt <- function(p) {
+  ifelse(p < 0.001, "<0.001", sprintf("%.3f", p))
+}
+cont_vars <- c("AGE", "CESDR_TOTAL_SUM", "SABCS_TOTAL_SUM")
+
+cont_table <- lapply(cont_vars, function(v){
+  
+  ttest <- t.test(SRD[[v]] ~ SRD$HX_SUICIDE)
+  eff <- cohens_d(SRD[[v]] ~ SRD$HX_SUICIDE)
+  
+  data.frame(
+    Characteristic = v,
+    Total = mean_sd(SRD[[v]]),
+    History = mean_sd(SRD %>% filter(HX_SUICIDE=="History") %>% pull(v)),
+    No_History = mean_sd(SRD %>% filter(HX_SUICIDE=="No History") %>% pull(v)),
+    Effect_Size = sprintf("d = %.2f (95%% CI %.2f, %.2f)",
+                          eff$Cohens_d, eff$CI_low, eff$CI_high),
+    P_value = p_val_fmt(ttest$p.value)
+  )
+}) %>% bind_rows()
+
+cat_vars <- c("GENDER","RACE","ETHNICITY","INCOME",
+              paste0("ACES___", 1:10))
+
+cat_table <- lapply(cat_vars, function(v){
+  
+  tab <- table(SRD[[v]], SRD$HX_SUICIDE)
+  chi <- suppressWarnings(chisq.test(tab))
+  eff <- cramers_v(tab)
+  
+  total_n <- nrow(SRD)
+  yes_n <- sum(SRD$HX_SUICIDE=="History")
+  no_n <- sum(SRD$HX_SUICIDE=="No History")
+  
+  rows <- lapply(rownames(tab), function(level){
+    data.frame(
+      Characteristic = paste(v, "-", level),
+      Total = prop_fmt(sum(tab[level,]), total_n),
+      History = prop_fmt(tab[level,"History"], yes_n),
+      No_History = prop_fmt(tab[level,"No History"], no_n),
+      Effect_Size = sprintf("V = %.2f", eff$Cramers_v),
+      P_value = p_val_fmt(chi$p.value)
+    )
+  })
+  
+  bind_rows(rows)
+}) %>% bind_rows()
+
+table1 <- bind_rows(cont_table, cat_table)
+table1$Characteristic <- gsub("ACES___", "ACE ", table1$Characteristic)
+
+ft <- flextable(table1)
+ft <- autofit(ft)
+ft <- add_header_lines(ft, values = "Table 1: Demographic and Mental Health Characteristics (n = 546)")
+ft
+```
+** Notes.**
+Continuous variables are reported as mean ± standard deviation.
+Between-group comparisons for continuous variables were conducted using Welch’s two-sample t-tests, and effect sizes are reported as Cohen’s d with 95% confidence intervals
+
+Categorical variables are reported as frequency (percentage).
+Comparisons for categorical variables were conducted using Pearson’s chi-square tests. Effect sizes are reported as phi (φ) for 2×2 tables and Cramér’s V (V) for tables with more categories.
+
+Statistical significance was evaluated at α = 0.05.
+## Question 2
+
+#### A.
+The mean suicidal-risk scores were pretty similar across the groups (Asian: 3.65, Other: 3.71, White/Caucasian: 3.16), and all groups showed variability with several outliers. 
+
+The ANOVA indicated no statistically significant differences in mean suicidal-risk scores among the race groups, F(2, 543) = 0.667, p = 0.5138, meaning the average suicidal-risk levels appear similar across the racial groups.
+
+#### B.Checking assumptions:
+The residuals were spread out evenly enough across the fitted values, suggesting that the variance assumption was met.The Q–Q plot showed some slight deviations from normality but ANOVA is well rounded, so the assumptions were still good.
+
+#### C.Post-hoc analysis:
+Post-hoc analysis was not appropriate because ANOVA did not show any significant differences. If there is not differences in the racial groups the post-hoc test will not provide any information of relevance. Suicidal risk scores did not differ enough to justify any further analysis. 
+
+#### D.Linear Regression: 
+The regression showed that neither the Asian group nor the Other group has significant differences in suicidal-risk scores (both p > 0.05), which means that race does not meaningfully predict suicidal-risk levels in this sample.
+
+
+#### E.Compare and Contrast your Results: 
+The ANOVA and regression results were consistent with each other. Both analyses showed no significant differences in suicidal-risk scores across the race groups. Overall, the findings tell us that race does not play a significant role in suicidal risk scores. 
+
+```{r question 2, echo=FALSE,message=FALSE}
+
+race_summary <- SRD %>%
+  group_by(RACE) %>%
+  summarise(
+    mean_suicidal = mean(SABCS_TOTAL_SUM, na.rm = TRUE),
+    sd_suicidal   = sd(SABCS_TOTAL_SUM, na.rm = TRUE),
+    n             = n()
+  )
+
+race_summary
+
+ggplot(SRD, aes(x = RACE, y = SABCS_TOTAL_SUM)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(
+    x = "Race",
+    y = "Suicidal Risk (SABCS)",
+    title = "Distribution of Suicidal Risk by Race"
+  )
+
+anova_race <- aov(SABCS_TOTAL_SUM ~ RACE, data = SRD)
+summary(anova_race)
+plot(anova_race, which = 1) 
+plot(anova_race, which = 2) 
+TukeyHSD(anova_race)
+
+SRD$RACE <- factor(SRD$RACE,
+                   levels = c("White/Caucasian", "Asian", "Other"))
+
+race_lm <- lm(SABCS_TOTAL_SUM ~ RACE, data = SRD)
+summary(race_lm)
+```
+
+
+## Question 3 
+
+#### A.Group comparison
+The mean suicidal-risk scores were low across all income categories, with only small differences. The ANOVA showed a statistically significant difference in mean suicidal-risk scores among the five income groups, F(4, 541) = 2.964, p = 0.0193, indicating that at least one income group had a different average suicidal-risk score compared to the others.This is why statistical analysis is important rather than relying only on visual guides, because visuals alone can make group differences appear different that how they really are. 
+
+#### B. Checking assumptions
+Assumptions were met to proceed with the remaining analysis. Income groups were reasonably spread out, and there were no major violations of homogeneity of variance. Additionally, although the Q–Q plot showed some deviations from normality, these were not severe, and ANOVA is robust to handle the slight non-normality.
+
+#### C.Post-hoc analysis:
+A post-hoc analysis was appropriate because the ANOVA showed a statistically significant difference. The tukey test showed that the $51,000–$75,000 and  the $76,000–$100,000 income groups had significantly lower suicidal risk scores compared to the lowest income group.
+
+Most of the other group comparisons were not significant , which suffest that income *does* have an effect but that they are not consistent across all income levels. 
+
+#### D.Linear regression: 
+The regression showed that people with high-income had significantly lower suicide risk scores (p<.05) which indicates that higher income is associated with reduced suicidal risk . 
+
+
+#### E.Compare and contrast your results: 
+Both analyses showed that income has a statistically significant effect on suicidal-risk scores. More specifically, the regression identified that the $51,000–$75,000 and $76,000–$100,000 income groups had significantly lower suicidal-risk scores compared to the < $30,000 group, while the other income groups did not differ significantly. ANOVA told us that at least one group differs overall, and the regression clarified exactly which groups were lower.
+
+```{r question 3,echo=FALSE,message=FALSE}
+
+anova_income <- aov(SABCS_TOTAL_SUM ~ INCOME, data = SRD)
+summary(anova_income)
+
+ggplot(SRD, aes(x = INCOME, y = SABCS_TOTAL_SUM)) +
+  geom_boxplot(fill = "green") +
+  theme_minimal() +
+  labs(x = "Income Group", y = "Suicidal Risk (SABCS)",
+       title = "Distribution of Suicidal Risk Across Income Groups")
+plot(anova_income, which = 1)  
+plot(anova_income, which = 2)  
+
+
+TukeyHSD(anova_income)
+
+
+
+SRD$INCOME <- factor(SRD$INCOME,
+  levels = c("< $30,000", "$30,000 - $50,000",
+             "$51,000 - $75,000", "$76,000 - $100,000", ">$100,000"))
+
+summary(lm(SABCS_TOTAL_SUM ~ INCOME, data = SRD))
+
+```
+
+## Question 4
+
+#### A. Group comparison:
+
+The two-sample t-test shows no statistical significance difference in suicide risk by gender. ( p= .7039)) In plain language, both genders have a similar average of suicide risk. OR gender does not influence suicide risk . 
+
+#### B. Group comparison
+
+Male suicide risk scores were about .33points lower than females but this difference was found to be not statitically significant (p=.652), resolidifying the fact that geneder does not influence suicide risk.
+
+#### C.Compare and contrast your results: 
+
+The average scores for the two gender groups were nearly identical, and neither analysis found a statistically significant effect. Overall, both results suggest that gender is not an important factor in suicidal-risk levels in this dataset.
+
+```{r question 4,echo=FALSE,message=FALSE}
+
+t.test(SABCS_TOTAL_SUM ~ GENDER, data = SRD)
+
+SRD$GENDER <- factor(SRD$GENDER, levels = c("Female", "Male"))
+summary(lm(SABCS_TOTAL_SUM ~ GENDER, data = SRD))
+```
+
+
+
+## Question 5 
+
+#### A.Visualization: 
+
+A scatterplot was used to show the relationship between two continuous variables—depression and suicidal risk. The relationship between depression and suicidal risk is linear. The direction of the relationship is positive. Suicidal-risk scores increase as depression scores increase. The strength of the relationship is strong.
+
+#### B.Estimation:
+
+The correlation between depression and suicidal risk is r = 0.589, which points to a moderately strong positive relationship. This means that individuals with higher depression scores have higher suicidal-risk scores.
+
+#### C.Test assumptions: 
+
+I believe the assumptions were met. There were no extreme outliers. and the scatter plot was relativley clear and linear which statisfied the linearity assumption . 
+
+#### D.Test correlation: 
+
+Correlation t(544) = 17.01, p < 2.2e-16.
+For every 1-point increase in depression score, suicidal-risk scores increase by about 0.21 points.
+
+#### E.Visualization: 
+
+Fitting a line was appropriate because the line was clearily linear . The equation of the line is : SABCS score = 0.0109 + 0.209 × CESD-R score
+
+#### F. Linear regression: 
+
+The regression analysis showed that the slope was statistically significant.Depression is a strong predictor of suicidal risk scores. Higher depression scores correlate to higher suicicial risk scores and this relationship is not by choice. 
+
+
+```{r question 5, echo=FALSE,message=FALSE}
+
+ggplot(SRD, aes(x = CESDR_TOTAL_SUM, y = SABCS_TOTAL_SUM)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_minimal() +
+  labs(
+    x = "Depression (CESD-R total score)",
+    y = "Suicidal Risk (SABCS total score)",
+    title = "Suicidal Risk vs. Depression"
+  )
+cor.test(SRD$CESDR_TOTAL_SUM, SRD$SABCS_TOTAL_SUM)
+
+q5<- lm(SABCS_TOTAL_SUM ~ CESDR_TOTAL_SUM, data = SRD)
+coef(q5)
+
+summary(q5)
+```
+
+
+## Question 6 
+
+#### A Visualizations
+The visual I chose to use is a scatterplot because it is a good way to visualize the relationship between age and suicidal risk scores ( both variables are continuous data ).
+
+The relationship between age and suicidal risk is linear in form, with points loosely following a  slight downward trend. The direction of the relationship is negative.The strength of the relationship is weak as shown by the correlation value and the wide spread of points in the scatterplot. 
+
+#### B.Estimation
+The estimated correlation between age and suicide risk is r = -.075. This demonstrates a weak relationship, suicidal-risk scores decrease slightly as age increases but not significantly. 
+
+
+#### C.Test assumptions: 
+To check if the assumptions for the correlation were appropriate, I looked at the scatterplot and the boxplots. The relationship is fairly linear, and there are no extreme outliers. So even though the data is not perfectly normally distributed, the assumptions for the correlation test were met.
+
+#### D.Test Correlation
+The correlation was not statistically significant (p = 0.0795). In plain language, the relationship is not strong enough to say that age and suicidal risk are meaningfully related. Age is not a reliable predictor of suicidal risk.
+
+#### E.Visualization:
+Estimated equation for the line :
+SABCS score = 4.70 – 0.056 × Age
+Suicidal-risk scores decrease by about 0.056 points for each year.
+
+#### F.Linear regression:
+The regression analysis showed that the slope of the line of best fit was not statistically significant,p = 0.0795. In simple terms, even though older participants tended to score  lower, this pattern was not strong enough to be considered a real or reliable relationship.
+
+
+
+```{r question-6, echo=FALSE, message=FALSE}
+ggplot(SRD, aes(x = AGE, y = SABCS_TOTAL_SUM)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_minimal() +
+  labs(
+    x = "Age",
+    y = "Suicidal Risk (SABCS)",
+    title = "Suicidal Risk vs. Age"
+  )
+
+boxplot(SRD$AGE, main="Age")
+boxplot(SRD$SABCS_TOTAL_SUM, main="SABCS Total Score")
+summary(lm(SABCS_TOTAL_SUM ~ AGE, data = SRD))
+
+cor.test(SRD$AGE, SRD$SABCS_TOTAL_SUM)
+
+```
