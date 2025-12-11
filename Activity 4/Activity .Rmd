@@ -1,0 +1,415 @@
+---
+title: "Assignment 4"
+author: "EMH"
+date: "2025-12-10"
+output: word_document
+---
+
+
+# Activity 4 for Biometry : 
+
+
+```{r setup, include=FALSE}
+library(tidyverse)        
+library(readxl)           
+library(gtsummary)       
+library(flextable)      
+library(car)         
+library(performance)   
+library(ResourceSelection) 
+library(broom)
+library(pROC)             
+library(here)
+
+SuicideRisk_Data <- read_excel(here("SuicideRisk_Data.xlsx"))
+View(SuicideRisk_Data)
+
+colnames(SuicideRisk_Data)
+
+```
+
+```{r Data Cleaning,echo=FALSE }
+# Mutating to required references from module  
+
+SuicideRisk_Data <- SuicideRisk_Data |>
+  mutate(
+    GENDER = factor(GENDER,
+                    levels = c("Female", "Male")),  
+    
+    RACE = factor(RACE,
+                  levels = c("White/Caucasian", "Asian", "Other")),   
+    
+    ETHNICITY = factor(ETHNICITY,
+                       levels = c("Not Hispanic/Latino", "Hispanic/Latino")),  
+    
+    INCOME = factor(INCOME,
+                    levels = c("< $30,000",
+                               "$30,000 - $50,000",
+                               "$51,000 - $75,000",
+                               "$76,000 - $100,000",
+                               ">$100,000")),  
+    ACES___1  = factor(ACES___1,  levels = c(0, 1)),
+    ACES___2  = factor(ACES___2,  levels = c(0, 1)),
+    ACES___3  = factor(ACES___3,  levels = c(0, 1)),
+    ACES___4  = factor(ACES___4,  levels = c(0, 1)),
+    ACES___5  = factor(ACES___5,  levels = c(0, 1)),
+    ACES___6  = factor(ACES___6,  levels = c(0, 1)),
+    ACES___7  = factor(ACES___7,  levels = c(0, 1)),
+    ACES___8  = factor(ACES___8,  levels = c(0, 1)),
+    ACES___9  = factor(ACES___9,  levels = c(0, 1)),
+    ACES___10 = factor(ACES___10, levels = c(0, 1)),
+  
+    CESDR_TOTAL_SUM = as.numeric(CESDR_TOTAL_SUM),
+    
+    HX_SUICIDE = factor(HX_SUICIDE,
+                        levels = c(0, 1),
+                        labels = c("No", "Yes")),
+    
+    SABCS_TOTAL_SUM = as.numeric(SABCS_TOTAL_SUM)
+  )
+
+```
+
+## 1A.
+
+Generate a multivariable model regressing SABCS_TOTAL_SUM on demographic variables representing age, gender, race, ethnicity, and annual household income. Examine and report model diagnostics. Explain your findings in 5 sentences or less using plain language.
+
+```{r Part 1A: Multivariable Linear Regression,echo=FALSE}
+# Outcome: SABCS_TOTAL_SUM
+# Predictors: AGE, GENDER, RACE, ETHNICITY, INCOME
+#Using set references 
+
+model_1a <- lm(
+SABCS_TOTAL_SUM ~ AGE + GENDER + RACE + ETHNICITY + INCOME,
+data = SuicideRisk_Data
+)
+
+
+par(mfrow = c(1, 2)) 
+plot(model_1a, which = 1:2)
+summary(model_1a)
+
+tbl_regression(model_1a) |> 
+  as_flex_table()
+```
+#### Explaining my findings 
+In this model, demographic factors really weren’t strongly connected to suicidal risk scores. There was a small trend where younger people had slightly higher scores, but the effect wasn’t very strong. Of course people with higher household incomes tended to have lower suicidal risk, while those earning under $30K showed higher risk. Gender, race, and ethnicity didn’t show much difference.
+Overall, the diagnostics and results suggest that demographics only explain a small part of suicidal risk in this dataset.
+The residuals-versus-fitted plot showed a clear fan-shaped spread, meaning the residuals did not have constant variance and the linearity assumption was only partially met. The Q–Q plot showed strong curvature and heavy right skew, indicating the residuals were not normally distributed.
+
+
+### B. Generate a model regressing SABCS_TOTAL_SUM on depression [CESDR_TOTAL_SUM] as measured by the Center for Epidemiologic Studies Depression Scale-Revised (CESD-R). Examine and report model diagnostics. Explain your findings in 2-3 sentences using plain language.
+```{r Part 1B linear regression,echo=FALSE,message=FALSE}
+# Outcome: SABCS_TOTAL_SUM
+# Predictor: CESDR_TOTAL_SUM 
+
+model_1b <- lm(SABCS_TOTAL_SUM ~ CESDR_TOTAL_SUM, data = SuicideRisk_Data)
+
+summary(model_1b)
+
+par(mfrow = c(1, 2))
+plot(model_1b, which = 1:2)
+
+tbl_regression(model_1b) |> 
+  as_flex_table()
+```
+#### Plain langauge Interpretation 
+Depression scores displayed a high relation to suicidal risk. 1-point increase in depressive symptoms Is associated with .21 point increase in suicidal risk . This is a statistically significant relationship as demonstrated by the P value <.001. 
+In conclusion, Depression is a very strong predictor of suicidal risk. 
+The residuals-versus-fitted plot still showed uneven spread, but the pattern was slightly tighter than in the demographics model. The Q–Q plot showed right-skewed residuals with larger values off the tail of the fitted line. 
+
+
+
+
+
+
+
+
+
+
+### C. Generate a multivariable model regressing SABCS_TOTAL_SUM on Adverse Childhood Experiences (ACEs) items numbered 1 through 10 (ACES_1-ACES_10). Examine and report model diagnostics. Explain your findings in 5 sentences or less using plain language.
+
+```{r 1C Multivariate model,echo=FALSE,message=FALSE}
+model_1c <- lm(
+SABCS_TOTAL_SUM ~ ACES___1 + ACES___2 + ACES___3 + ACES___4 + ACES___5 +
+ACES___6 + ACES___7 + ACES___8 + ACES___9 + ACES___10,
+data = SuicideRisk_Data
+)
+
+summary(model_1c)
+
+par(mfrow = c(1, 2))
+plot(model_1c, which = 1:2)
+
+tbl_regression(model_1c) |> 
+  as_flex_table()
+```
+#### Plain Language Interpretation 
+Some Adverse Childhood Experiences were linked to higher suicidal risk. Specifically people who reported having experienced living with someone with mental illness, sexual abust,and emotional abuse all tended to have a higher suicide risk. Most other ACE's werent linked to suicidal risk however. The residual here was pretty unevenly and widely spread , the Q-Q plot is still right skewed with lots of deviations from the fitted line. 
+
+
+
+
+
+
+
+
+
+#### D. Generate a multivariable model for suicidal risk that combines all significant variables at the alpha = 0.20 level (a liberal threshold often used during variable selection) from parts a through c. Examine and report model diagnostics for this combined model. Explain your findings in 3-4 sentences using plain language.
+```{r 1d, echo=FALSE,message=FALSE}
+#Identify Sig variables here 
+get_sig_vars <- function(model) {
+  tidy(model) |>
+    filter(p.value < 0.20, term != "(Intercept)") |>
+    pull(term)
+}
+# Make data frames with only sig variables 
+sig_1a <- get_sig_vars(model_1a)
+sig_1b <- get_sig_vars(model_1b)
+sig_1c <- get_sig_vars(model_1c)
+#Put it into one dataframe 
+all_sig <- unique(c(sig_1a, sig_1b, sig_1c))
+all_sig
+
+
+model_1d <- lm(
+  SABCS_TOTAL_SUM ~ AGE + ETHNICITY + INCOME +
+    CESDR_TOTAL_SUM +
+    ACES___2 + ACES___3 + ACES___8 + ACES___9 + ACES___10,
+  data = SuicideRisk_Data
+)
+
+summary(model_1d)
+
+
+par(mfrow = c(1, 2))
+plot(model_1d, which = 1:2)
+
+tbl_regression(model_1d) |> 
+  as_flex_table()
+```
+
+#### Plain Language Interpretation 
+
+Depression symptoms were the strongest predictor of suicidal risk, even after accounting for demographics and childhood experiences. Just like we saw in the earlier models, sexual abuse, emotional abuse, and parental separation were significant predictors. Age and ethnicity showed small effects, while most income levels and other childhood experiences didn’t add much. In conclusion, this combined model explains more of the variation in suicidal risk, but the diagnostic plots still show skew and outliers.
+Still seeing uneven variation and curvature with the Q-Q plot still being reight skewed with an upper tail that deviates from the line. 
+
+
+
+
+
+
+
+
+### E. Create a new, transformed variable that is the square root of SABCS_TOTAL_SUM. Generate a multivariable model regressing the newly transformed variable on the same set of independent variables used in part d. Examine and report model diagnostics for this model. Explain your findings in 3-4 sentences using plain language.
+
+```{r sqare root,echo=FALSE,message=FALSE}
+SuicideRisk_Data <- SuicideRisk_Data |>
+  mutate(SABCS_SQRT = sqrt(SABCS_TOTAL_SUM))
+
+model_1e <- lm(
+  SABCS_SQRT ~ AGE + ETHNICITY + INCOME +
+    CESDR_TOTAL_SUM +
+    ACES___2 + ACES___3 + ACES___8 + ACES___9 + ACES___10,
+  data = SuicideRisk_Data
+)
+
+summary(model_1e)
+
+par(mfrow = c(1, 2))
+plot(model_1e, which = 1:2)
+
+tbl_regression(model_1e) |> 
+  as_flex_table()
+
+```
+
+
+
+
+
+
+
+
+#### Plain language interpretation 
+Depression symptoms are still by far the strongest predictor, which is exactly what I saw in the other models. A few childhood experiences—like sexual abuse, emotional abuse, and living with someone who had mental health problems—continued to show clear links to higher suicidal risk even after the transformation. 
+The q-q plot looks a lot better here and residuals plot is still pretty scattered.  
+
+### F. Compare and contrast the models from parts d and e. Which model better adheres to the underlying model assumptions? Which model is more interpretable? Given the tradeoffs, which model do you find more defensible, and why? Explain your reasoning in 5 sentences or less using plain language.
+
+The square-root–transformed model fit the statistical assumptions better because the residuals were less skewed and showed a more even spread compared to the untransformed model. However, the original model is easier to interpret since the coefficients reflect changes in the actual suicidal risk score rather than a transformed scale.
+Both models show the same key predictors which are depression symptoms and several childhood experiences which strengthens confidence that the findings are real and not due to random chance.
+
+
+
+
+
+
+## 2A Generate a multivariable model regressing HX_SUICIDE on demographic variables representing age, gender, race, ethnicity, and annual household income. Examine and report model diagnostics. Explain your findings in 2-3 sentences using plain language.
+```{r 2A multivariable model, echo=FALSE}
+model_2a <- glm(
+  HX_SUICIDE ~ AGE + GENDER + RACE + ETHNICITY + INCOME,
+  family = binomial(link = "logit"),
+  data = SuicideRisk_Data
+)
+
+hoslem.test(SuicideRisk_Data$HX_SUICIDE, fitted(model_2a))
+
+vif(model_2a)
+
+roc_2a <- roc(SuicideRisk_Data$HX_SUICIDE, fitted(model_2a))
+plot(roc_2a)
+auc(roc_2a)
+
+tbl_regression(model_2a, exponentiate = TRUE)
+
+```
+#### Plain language interpretation 
+Demographic characteristics : age, gender, race, ethnicity, and income—did not strongly predict who had a past suicide attempt. The overall model fit was acceptable. These results suggest that demographic information alone is not particularly helpful for identifying past suicide attempts. The Hosmer–Lemeshow test showed no evidence of poor fit (p = 0.33), meaning the model is reasonably well calibrated for predicting suicide history using demographic factors.
+
+
+### B Generate a model regressing HX_SUICIDE on depression [CESDR_TOTAL_SUM] as measured by CESD-R. Examine and report model diagnostics. Explain your findings in 2-3 sentences using plain language.
+```{r}
+model_2b <- glm(
+  HX_SUICIDE ~ CESDR_TOTAL_SUM,
+  family = binomial(link = "logit"),
+  data = SuicideRisk_Data
+)
+
+summary(model_2b)
+
+# Diagnostics
+hoslem.test(SuicideRisk_Data$HX_SUICIDE, fitted(model_2b))
+
+roc_2b <- roc(SuicideRisk_Data$HX_SUICIDE, fitted(model_2b))
+plot(roc_2b)
+auc(roc_2b)
+
+tbl_regression(model_2b, exponentiate = TRUE)
+
+```
+#### Plain language interpretation 
+The Hosmer–Lemeshow test showes a really good fit (p = 0.78). The ROC curve had an AUC of 0.74, indicating moderate discrimination.
+People with higher depression scores were more likely to report a past suicide attempt. For each one-point increase in CESD-R score, the odds of having a suicide history/attempt increased by about 6%. Dpression symptoms are strong and reliable predictor of suicide history in this dataset.
+
+
+
+
+
+
+### C Generate a multivariable model regressing HX_SUICIDE on ACES_1 through ACES_10. Examine and report model diagnostics. Explain your findings in 2-3 sentences using plain language.
+```{r}
+model_2c <- glm(
+  HX_SUICIDE ~ ACES___1 + ACES___2 + ACES___3 + ACES___4 +
+    ACES___5 + ACES___6 + ACES___7 + ACES___8 + ACES___9 + ACES___10,
+  family = binomial(link = "logit"),
+  data = SuicideRisk_Data
+)
+
+summary(model_2c)
+
+# Diagnostics
+hoslem.test(SuicideRisk_Data$HX_SUICIDE, fitted(model_2c))
+
+roc_2c <- roc(SuicideRisk_Data$HX_SUICIDE, fitted(model_2c))
+plot(roc_2c)
+auc(roc_2c)
+
+tbl_regression(model_2c, exponentiate = TRUE)
+
+```
+#### Plain language interpretation 
+Many of childhood adversity were associated with higher odds of having a history of suicide attempts. Including sexual abuse , emotional abuse, and household mental illness were strong and statistically significant predictors of suicidal history . Not all ACEs were related to suicide risk.
+Diagnostics showed a good/okay fitting (p = 0.51), meaning the model’s predicted probabilities align well with the observed data.
+
+
+
+### D Generate a final multivariable model for history of suicide that combines all significant variables at the alpha = 0.20 level from parts a through c. Summarize your findings in a table.
+```{r}
+model_2d <- glm(
+  HX_SUICIDE ~ AGE + ETHNICITY + INCOME +
+    CESDR_TOTAL_SUM +
+    ACES___2 + ACES___3 + ACES___8 + ACES___9 + ACES___10,
+  family = binomial(link = "logit"),
+  data = SuicideRisk_Data
+)
+
+summary(model_2d)
+
+# Diagnostics
+hoslem.test(SuicideRisk_Data$HX_SUICIDE, fitted(model_2d))
+vif(model_2d)
+
+roc_2d <- roc(SuicideRisk_Data$HX_SUICIDE, fitted(model_2d))
+plot(roc_2d)
+auc(roc_2d)
+
+tbl_regression(model_2d, exponentiate = TRUE)
+
+```
+#### Plain language interpretation 
+Depression symptoms remained the strongest predictor of having a history of suicide attempts—each one-point increase in depression score raised the odds by about 5%.
+
+The same childhood experiences also mattered significant : sexual abuse was a particularly strong predictor, household mental illness showed another association with higher suicide risk. Again demographic factors were not meaningful once psychological and childhood experiences were included. With the exception of ethnicity, where Not Hispanic/Latino participants had lower odds of a suicide history. 
+
+
+
+### E Examine and report model diagnostics of your final multivariable model for history of suicide. Explain your findings in 3-4 sentences using plain language.
+
+The final model showed good fit, as indicated by  (p = 0.57), meaning the predicted probabilities matched the observed data well. All VIF values were low. The ROC curve had an AUC of 0.855, which shows strong discrimination. The model is effective at distinguishing individuals who have a history of suicide attempts from those who do not. 
+
+
+### 3 Using the final models generated in parts 1d and 2d from this assignment
+#### A Choose one independent variable from each model that showed a statistically significant association (alpha = 0.05) with the dependent variable. For each independent variable, report the corresponding measure of effect (e.g., beta coefficient, relative risk, or odds ratio) and interpret it in plain language in 1-2 
+
+#### Plain language interpretation 
+1D: CESD-R depression score.
+Beta = 0.185
+This means that for every 1-point increase in depression symptoms, the suicidal risk score increased by about 0.19 points, showing that higher depression levels were strongly linked to greater suicidal risk.
+
+2D Suicide History
+Sexual abuse
+Odds Ratio = 4.25 (95% CI: 2.09–8.69)
+This means individuals who experienced sexual abuse had more than four times the odds of having a suicide attempt history compared to those who did not.
+
+
+
+
+#### B Choose one independent variable from each model that did not show a statistically significant association (alpha = 0.05) with the dependent variable. For each independent variable, report the corresponding measure of effect (e.g., beta coefficient, relative risk, or odds ratio) and interpret it in plain language in 1-2 sentences.
+#### Plain language interpretation 
+1D:
+INCOME > $100,000.
+Beta = 0.21
+This means people in the highest income category had suicidal risk scores only about 0.2 points higher than those earning under $30,000, but this difference was so small that it is likely due to chance.
+
+2D
+AGE.
+Odds Ratio = 1.01 (95% CI: 0.96–1.07)
+This means age did not meaningfully change the odds of having a suicide attempt history—older and younger participants had roughly the same likelihood.
+
+
+
+
+#### 4A
+Which observational study design does this analysis most closely resemble (cross-sectional, case-control, or cohort)? Explain your reasoning in 2-3 sentences.
+This dataset most closely resembles a cross-sectional study.
+All variables—including demographics, ACEs, depression symptoms, suicidal risk, and suicide history—were measured at the same point in time. No one was followed over time, and the exposure and outcome information were collected at the same time. 
+
+
+
+#### B 
+Discuss one limitation of this study design when trying to interpret relationships between variables in 1-2 sentences.
+A major limitation of cross-sectional studies is that they cannot determine cause and effect because we do not know whether the exposure occurred before the outcome. This means we can only describe associations, not confirm what actually led to suicidal thoughts or behaviors.
+
+
+#### C 
+Explain how you might redesign this study to minimize that limitation in 3-4 sentences
+To overcome this limitation, the study could be redesigned as a longitudinal cohort study, where researchers follow participants over time. They would measure ACEs or psychological factors first, and then track changes in suicidal risk or suicide attempts in later months or years. This would establish a clear timeline and help identify which risk factors appear before the outcomes. A longitudinal approach also allows for repeated assessments, which improves accuracy and repeatability. 
+
+
+
+
+
+
+
+.
